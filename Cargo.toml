@@ -1,0 +1,58 @@
+[package]
+name = "micro-wakeword"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Rust detection and microphone listening for microWakeWord-compatible TFLite models"
+license = "MIT"
+repository = "https://github.com/TaterTotterson/microwakeword-rs"
+readme = "README.md"
+keywords = ["wake-word", "audio", "tflite", "speech", "microphone"]
+categories = ["multimedia::audio", "science"]
+include = [
+    "/build.rs",
+    "/src/**",
+    "/native/frontend_bridge.cc",
+    "/native/vendor/**",
+    "/runtime/**",
+    "/examples/**",
+    "/tests/**",
+    "/LICENSE",
+    "/LICENSES/**",
+    "/README.md",
+]
+
+[features]
+default = ["listener"]
+listener = ["dep:cpal", "dep:rubato"]
+
+[dependencies]
+cpal = { version = "0.16", optional = true }
+rubato = { version = "3.0", features = ["fft_resampler"], optional = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+thiserror = "2.0"
+tflite-c-rs = "0.0.1"
+
+[build-dependencies]
+cc = "1.2"
+
+[dev-dependencies]
+tempfile = "3.20"
+
+[[example]]
+name = "listen"
+required-features = ["listener"]
+
+[[example]]
+name = "model_only"
+required-features = ["listener"]
+
+[[example]]
+name = "detector_access"
+required-features = ["listener"]
+
+[[example]]
+name = "error_handling"
+required-features = ["listener"]
