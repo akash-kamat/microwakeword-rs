@@ -6,7 +6,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/micro-wakeword.svg)](https://crates.io/crates/micro-wakeword)
 [![docs.rs](https://docs.rs/micro-wakeword/badge.svg)](https://docs.rs/micro-wakeword)
-[![CI](https://github.com/TaterTotterson/microwakeword-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/TaterTotterson/microwakeword-rs/actions/workflows/ci.yml)
+[![CI](https://github.com/akash-kamat/microwakeword-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/akash-kamat/microwakeword-rs/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 </div>
