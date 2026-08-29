@@ -2,6 +2,7 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightLlmsTxt from 'starlight-llms-txt';
 import starlightPageActions from 'starlight-page-actions';
+import gruvbox from 'starlight-theme-gruvbox';
 
 const site = process.env.SITE_URL || process.env.CF_PAGES_URL || 'https://micro-wakeword.pages.dev';
 const base = process.env.BASE_PATH || '/';
@@ -11,7 +12,7 @@ export default defineConfig({
   base,
   integrations: [
     starlight({
-      title: 'micro-wakeword',
+      title: 'micro-wakeword / guide',
       description: 'Local, streaming wake-word detection for Rust.',
       favicon: '/favicon.svg',
       lastUpdated: true,
@@ -23,12 +24,13 @@ export default defineConfig({
       ],
       customCss: ['./src/styles/custom.css'],
       head: [
-        { tag: 'meta', attrs: { name: 'theme-color', content: '#6d5dfc' } },
+        { tag: 'meta', attrs: { name: 'theme-color', content: '#282828' } },
         { tag: 'meta', attrs: { property: 'og:type', content: 'website' } },
         { tag: 'meta', attrs: { property: 'og:title', content: 'micro-wakeword handbook' } },
         { tag: 'meta', attrs: { property: 'og:description', content: 'Build local wake-word detection into Rust apps.' } },
       ],
       plugins: [
+        gruvbox(),
         starlightLlmsTxt({
           projectName: 'micro-wakeword',
           description: 'A Rust library for local microWakeWord-compatible wake-word detection.',
