@@ -46,7 +46,41 @@ jobs:
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/package-target
 
+      - name: Build Windows CLI
+        run: cargo build --release --locked --bin micro-wakeword
+
+      - name: Prepare release assets
+        id: assets
+        shell: pwsh
+        env:
+          CRATE_VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          $name = "micro-wakeword-v$env:CRATE_VERSION-windows-x86_64.exe"
+          $asset = Join-Path $env:RUNNER_TEMP $name
+          Copy-Item "target\release\micro-wakeword.exe" $asset
+          $hash = (Get-FileHash $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $name" | Set-Content "$asset.sha256" -Encoding ascii
+          "executable=$asset" >> $env:GITHUB_OUTPUT
+          "checksum=$asset.sha256" >> $env:GITHUB_OUTPUT
+
+      - name: Check whether this version is already on crates.io
+        id: registry
+        shell: pwsh
+        env:
+          CRATE_VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          $uri = "https://crates.io/api/v1/crates/micro-wakeword/$env:CRATE_VERSION"
+          $response = Invoke-WebRequest $uri -SkipHttpErrorCheck
+          if ($response.StatusCode -eq 200) {
+            "exists=true" >> $env:GITHUB_OUTPUT
+          } elseif ($response.StatusCode -eq 404) {
+            "exists=false" >> $env:GITHUB_OUTPUT
+          } else {
+            throw "crates.io returned HTTP $($response.StatusCode)"
+          }
+
       - name: Publish to crates.io
+        if: steps.registry.outputs.exists != 'true'
         run: cargo publish --locked
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
@@ -56,6 +90,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CRATE_VERSION: ${{ steps.metadata.outputs.version }}
+          EXECUTABLE: ${{ steps.assets.outputs.executable }}
+          CHECKSUM: ${{ steps.assets.outputs.checksum }}
         run: |
           $crate = Join-Path $env:RUNNER_TEMP "package-target\package\micro-wakeword-$env:CRATE_VERSION.crate"
-          gh release create $env:GITHUB_REF_NAME $crate --verify-tag --generate-notes --title "micro-wakeword $env:CRATE_VERSION"
+          gh release create $env:GITHUB_REF_NAME $crate $env:EXECUTABLE $env:CHECKSUM --verify-tag --generate-notes --title "micro-wakeword $env:CRATE_VERSION"

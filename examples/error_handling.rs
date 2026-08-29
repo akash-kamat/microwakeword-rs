@@ -13,9 +13,6 @@ fn main() {
             }
             Error::InvalidConfig(message) => eprintln!("Invalid settings: {message}"),
             Error::IncompatibleModel(message) => eprintln!("Incompatible model: {message}"),
-            Error::Audio(message) if message.contains("queue overflowed") => {
-                eprintln!("Audio was dropped because processing fell behind: {message}");
-            }
             Error::Audio(message) => eprintln!("Microphone error: {message}"),
             Error::AudioStreamEnded => eprintln!("The microphone stream ended."),
             Error::UnsupportedPlatform(message) => eprintln!("Unsupported platform: {message}"),

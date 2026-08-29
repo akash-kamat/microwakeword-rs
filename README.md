@@ -41,6 +41,18 @@ cargo add micro-wakeword
 Windows builds require the MSVC C++ build tools because the audio frontend is
 compiled as part of the crate.
 
+### Ready-made Windows command
+
+Each [GitHub release](https://github.com/akash-kamat/microwakeword-rs/releases)
+includes a prebuilt Windows x86-64 executable and its SHA-256 checksum. Keep
+your model JSON and `.tflite` file together, then run:
+
+```powershell
+.\micro-wakeword-v0.1.2-windows-x86_64.exe wake-word.json --cooldown 0.5
+```
+
+Use `--list-devices` to find microphone names and `--help` for every option.
+
 ## Quick start: listen to a microphone
 
 ```rust,no_run
@@ -80,6 +92,11 @@ let mut listener = Listener::config_builder("wake-word.json")?
 
 The default cooldown is one second. Use `Duration::ZERO` to disable repeat
 suppression. List available inputs with `available_input_devices()`.
+
+If processing briefly falls behind, the listener discards stale microphone
+audio, resets the detector, and continues automatically. You can inspect the
+cumulative count with `listener.dropped_audio_blocks()`; a dropped block is 10
+milliseconds. Run latency-sensitive applications with `--release`.
 
 ## Only have a `.tflite` model?
 

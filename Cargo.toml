@@ -1,6 +1,6 @@
 [package]
 name = "micro-wakeword"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 rust-version = "1.85"
 description = "Rust detection and microphone listening for microWakeWord-compatible TFLite models"
@@ -40,6 +40,11 @@ cc = "1.2"
 
 [dev-dependencies]
 tempfile = "3.20"
+
+[[bin]]
+name = "micro-wakeword"
+path = "src/bin/micro-wakeword.rs"
+required-features = ["listener"]
 
 [[example]]
 name = "listen"

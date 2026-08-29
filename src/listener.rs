@@ -1,12 +1,11 @@
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 use cpal::Stream;
 use cpal::traits::StreamTrait;
 
-use crate::audio::{AudioEvent, open_input};
+use crate::audio::{AudioStatus, open_input};
 use crate::{Config, Detection, Detector, Error, Result, Runtime};
 
 /// The repeat-suppression period used by [`Listener`] unless overridden.
@@ -15,8 +14,9 @@ pub const DEFAULT_COOLDOWN: Duration = Duration::from_secs(1);
 /// A live microphone stream connected to a detector.
 pub struct Listener {
     detector: Detector,
-    receiver: mpsc::Receiver<AudioEvent>,
-    dropped: Arc<AtomicUsize>,
+    receiver: mpsc::Receiver<[i16; crate::AUDIO_BLOCK_SAMPLES]>,
+    audio_status: Arc<AudioStatus>,
+    dropped_audio_blocks: usize,
     cooldown: Cooldown,
     _stream: Stream,
 }
@@ -45,13 +45,14 @@ impl Listener {
         cooldown: Duration,
     ) -> Result<Self> {
         let (sender, receiver) = mpsc::sync_channel(32);
-        let dropped = Arc::new(AtomicUsize::new(0));
-        let stream = open_input(device, sender, dropped.clone())?;
+        let audio_status = Arc::new(AudioStatus::default());
+        let stream = open_input(device, sender, audio_status.clone())?;
         stream.play().map_err(|e| Error::Audio(e.to_string()))?;
         Ok(Self {
             detector,
             receiver,
-            dropped,
+            audio_status,
+            dropped_audio_blocks: 0,
             cooldown: Cooldown::new(cooldown),
             _stream: stream,
         })
@@ -60,15 +61,19 @@ impl Listener {
     /// Block until a detection occurs or the audio stream reports an error.
     pub fn next_detection(&mut self) -> Result<Option<Detection>> {
         loop {
-            let dropped = self.dropped.swap(0, Ordering::Relaxed);
-            if dropped != 0 {
-                self.detector.reset()?;
-                return Err(Error::Audio(format!(
-                    "microphone queue overflowed; dropped {dropped} audio blocks"
-                )));
+            if let Some(error) = self.audio_status.take_error() {
+                return Err(Error::Audio(error));
             }
-            match self.receiver.recv() {
-                Ok(AudioEvent::Samples(samples)) => {
+            if self.recover_from_overflow()? {
+                continue;
+            }
+            match self.receiver.recv_timeout(Duration::from_millis(50)) {
+                Ok(samples) => {
+                    // Recheck after receiving so a drop racing with the receive
+                    // cannot feed discontinuous audio into the detector.
+                    if self.recover_from_overflow()? {
+                        continue;
+                    }
                     if let Some(detection) = self.detector.process_audio(&samples)? {
                         let now = Instant::now();
                         if self.cooldown.accept(now) {
@@ -79,10 +84,22 @@ impl Listener {
                         }
                     }
                 }
-                Ok(AudioEvent::Error(error)) => return Err(Error::Audio(error)),
-                Err(_) => return Err(Error::AudioStreamEnded),
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(mpsc::RecvTimeoutError::Disconnected) => return Err(Error::AudioStreamEnded),
             }
         }
+    }
+
+    fn recover_from_overflow(&mut self) -> Result<bool> {
+        let dropped = self.audio_status.dropped();
+        if dropped == 0 {
+            return Ok(false);
+        }
+
+        while self.receiver.try_recv().is_ok() {}
+        self.detector.reset()?;
+        self.dropped_audio_blocks = self.dropped_audio_blocks.saturating_add(dropped);
+        Ok(true)
     }
 
     pub fn detector(&self) -> &Detector {
@@ -95,6 +112,12 @@ impl Listener {
     /// Duration for which repeated detections are suppressed.
     pub fn cooldown(&self) -> Duration {
         self.cooldown.duration
+    }
+
+    /// Number of audio blocks dropped and automatically recovered since this
+    /// listener was created. Each block represents 10 milliseconds of audio.
+    pub fn dropped_audio_blocks(&self) -> usize {
+        self.dropped_audio_blocks
     }
 }
 
@@ -193,7 +216,13 @@ impl ListenerBuilder {
 
     pub fn build(self) -> Result<Listener> {
         let detector =
-            if let Some(config) = self.config {
+            if let Some(mut config) = self.config {
+                apply_config_overrides(
+                    &mut config,
+                    self.wake_word,
+                    self.probability_cutoff,
+                    self.sliding_window_size,
+                );
                 Detector::from_parts(config, self.runtime)?
             } else {
                 Detector::builder(self.model_path.expect("builder model path is present"))
@@ -213,9 +242,27 @@ impl ListenerBuilder {
     }
 }
 
+fn apply_config_overrides(
+    config: &mut Config,
+    wake_word: Option<String>,
+    probability_cutoff: Option<f32>,
+    sliding_window_size: Option<usize>,
+) {
+    if let Some(wake_word) = wake_word {
+        config.wake_word = wake_word;
+    }
+    if let Some(probability_cutoff) = probability_cutoff {
+        config.probability_cutoff = probability_cutoff;
+    }
+    if let Some(sliding_window_size) = sliding_window_size {
+        config.sliding_window_size = sliding_window_size;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ModelMetadata;
 
     #[test]
     fn cooldown_suppresses_until_duration_has_elapsed() {
@@ -239,5 +286,28 @@ mod tests {
 
         assert!(cooldown.accept(now));
         assert!(cooldown.accept(now));
+    }
+
+    #[test]
+    fn config_builder_overrides_are_applied() {
+        let mut config = Config {
+            model_path: "model.tflite".into(),
+            wake_word: "original".into(),
+            probability_cutoff: 0.5,
+            sliding_window_size: 3,
+            feature_step_size_ms: 10,
+            metadata: ModelMetadata {
+                author: None,
+                website: None,
+                trained_languages: Vec::new(),
+                format_version: 2,
+            },
+        };
+
+        apply_config_overrides(&mut config, Some("override".into()), Some(0.75), Some(5));
+
+        assert_eq!(config.wake_word, "override");
+        assert_eq!(config.probability_cutoff, 0.75);
+        assert_eq!(config.sliding_window_size, 5);
     }
 }

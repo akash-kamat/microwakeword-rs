@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, mpsc::SyncSender};
+use std::sync::{Arc, Mutex, mpsc::SyncSender, mpsc::TrySendError};
 
 use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{Device, SampleFormat, Stream, StreamConfig};
@@ -30,15 +30,36 @@ pub fn available_input_devices() -> Result<Vec<AudioDevice>> {
 
 // Keeping samples inline avoids one heap allocation for every 10 ms audio block.
 #[allow(clippy::large_enum_variant)]
-pub(crate) enum AudioEvent {
-    Samples([i16; AUDIO_BLOCK_SAMPLES]),
-    Error(String),
+#[derive(Default)]
+pub(crate) struct AudioStatus {
+    dropped: AtomicUsize,
+    error: Mutex<Option<String>>,
+}
+
+impl AudioStatus {
+    pub(crate) fn dropped(&self) -> usize {
+        self.dropped.swap(0, Ordering::Relaxed)
+    }
+
+    pub(crate) fn report_error(&self, error: String) {
+        let mut pending = self.error.lock().unwrap_or_else(|lock| lock.into_inner());
+        if pending.is_none() {
+            *pending = Some(error);
+        }
+    }
+
+    pub(crate) fn take_error(&self) -> Option<String> {
+        self.error
+            .lock()
+            .unwrap_or_else(|lock| lock.into_inner())
+            .take()
+    }
 }
 
 pub(crate) fn open_input(
     selector: Option<&str>,
-    sender: SyncSender<AudioEvent>,
-    dropped: Arc<AtomicUsize>,
+    sender: SyncSender<[i16; AUDIO_BLOCK_SAMPLES]>,
+    status: Arc<AudioStatus>,
 ) -> Result<Stream> {
     let host = cpal::default_host();
     let device = if let Some(selector) = selector {
@@ -68,13 +89,13 @@ pub(crate) fn open_input(
     let format = supported.sample_format();
     let config = supported.config();
     match format {
-        SampleFormat::I16 => build_stream(&device, &config, sender, dropped, |s: i16| {
+        SampleFormat::I16 => build_stream(&device, &config, sender, status, |s: i16| {
             s as f32 / 32768.0
         }),
-        SampleFormat::U16 => build_stream(&device, &config, sender, dropped, |s: u16| {
+        SampleFormat::U16 => build_stream(&device, &config, sender, status, |s: u16| {
             (s as f32 - 32768.0) / 32768.0
         }),
-        SampleFormat::F32 => build_stream(&device, &config, sender, dropped, |s: f32| s),
+        SampleFormat::F32 => build_stream(&device, &config, sender, status, |s: f32| s),
         other => Err(Error::Audio(format!(
             "unsupported microphone sample format: {other:?}"
         ))),
@@ -87,16 +108,16 @@ struct Pipeline {
     pending_input: Vec<f32>,
     pending_output: Vec<f32>,
     resampler: Option<Fft<f32>>,
-    sender: SyncSender<AudioEvent>,
-    dropped: Arc<AtomicUsize>,
+    sender: SyncSender<[i16; AUDIO_BLOCK_SAMPLES]>,
+    status: Arc<AudioStatus>,
 }
 
 impl Pipeline {
     fn new(
         rate: u32,
         channels: usize,
-        sender: SyncSender<AudioEvent>,
-        dropped: Arc<AtomicUsize>,
+        sender: SyncSender<[i16; AUDIO_BLOCK_SAMPLES]>,
+        status: Arc<AudioStatus>,
     ) -> Result<Self> {
         if channels == 0 || rate % 100 != 0 {
             return Err(Error::Audio(format!(
@@ -126,7 +147,7 @@ impl Pipeline {
             pending_output: Vec::new(),
             resampler,
             sender,
-            dropped,
+            status,
         })
     }
 
@@ -160,8 +181,12 @@ impl Pipeline {
                     *out = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
                 }
                 self.pending_output.drain(..AUDIO_BLOCK_SAMPLES);
-                if self.sender.try_send(AudioEvent::Samples(block)).is_err() {
-                    self.dropped.fetch_add(1, Ordering::Relaxed);
+                match self.sender.try_send(block) {
+                    Ok(()) => {}
+                    Err(TrySendError::Full(_)) => {
+                        self.status.dropped.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(TrySendError::Disconnected(_)) => return Err(Error::AudioStreamEnded),
                 }
             }
         }
@@ -172,8 +197,8 @@ impl Pipeline {
 fn build_stream<T, F>(
     device: &Device,
     config: &StreamConfig,
-    sender: SyncSender<AudioEvent>,
-    dropped: Arc<AtomicUsize>,
+    sender: SyncSender<[i16; AUDIO_BLOCK_SAMPLES]>,
+    status: Arc<AudioStatus>,
     convert: F,
 ) -> Result<Stream>
 where
@@ -184,21 +209,19 @@ where
         config.sample_rate.0,
         config.channels as usize,
         sender.clone(),
-        dropped,
+        status.clone(),
     )?;
-    let error_sender = sender;
+    let stream_status = status.clone();
     device
         .build_input_stream(
             config,
             move |data: &[T], _| {
                 if let Err(error) = pipeline.push(data, &convert) {
-                    let _ = pipeline
-                        .sender
-                        .try_send(AudioEvent::Error(error.to_string()));
+                    pipeline.status.report_error(error.to_string());
                 }
             },
             move |error| {
-                let _ = error_sender.try_send(AudioEvent::Error(error.to_string()));
+                stream_status.report_error(error.to_string());
             },
             None,
         )
@@ -212,25 +235,39 @@ mod tests {
     #[test]
     fn downmixes_stereo_into_one_ten_millisecond_block() {
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
-        let dropped = Arc::new(AtomicUsize::new(0));
-        let mut pipeline = Pipeline::new(SAMPLE_RATE, 2, sender, dropped).unwrap();
+        let status = Arc::new(AudioStatus::default());
+        let mut pipeline = Pipeline::new(SAMPLE_RATE, 2, sender, status).unwrap();
         pipeline
             .push(&[0.5_f32; AUDIO_BLOCK_SAMPLES * 2], |sample| sample)
             .unwrap();
-        let AudioEvent::Samples(samples) = receiver.try_recv().unwrap() else {
-            panic!("expected audio")
-        };
+        let samples = receiver.try_recv().unwrap();
         assert!(samples.iter().all(|sample| *sample == 16_383));
     }
 
     #[test]
     fn reports_queue_overflow() {
         let (sender, _receiver) = std::sync::mpsc::sync_channel(0);
-        let dropped = Arc::new(AtomicUsize::new(0));
-        let mut pipeline = Pipeline::new(SAMPLE_RATE, 1, sender, dropped.clone()).unwrap();
+        let status = Arc::new(AudioStatus::default());
+        let mut pipeline = Pipeline::new(SAMPLE_RATE, 1, sender, status.clone()).unwrap();
         pipeline
             .push(&[0.0_f32; AUDIO_BLOCK_SAMPLES], |sample| sample)
             .unwrap();
-        assert_eq!(dropped.load(Ordering::Relaxed), 1);
+        assert_eq!(status.dropped(), 1);
+        assert_eq!(status.dropped(), 0);
+    }
+
+    #[test]
+    fn microphone_errors_are_not_lost_when_the_sample_queue_is_full() {
+        let (sender, _receiver) = std::sync::mpsc::sync_channel(1);
+        let status = Arc::new(AudioStatus::default());
+        let mut pipeline = Pipeline::new(SAMPLE_RATE, 1, sender, status.clone()).unwrap();
+        pipeline
+            .push(&[0.0_f32; AUDIO_BLOCK_SAMPLES], |sample| sample)
+            .unwrap();
+
+        status.report_error("device disconnected".into());
+
+        assert_eq!(status.take_error().as_deref(), Some("device disconnected"));
+        assert!(status.take_error().is_none());
     }
 }
