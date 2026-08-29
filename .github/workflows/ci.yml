@@ -10,6 +10,22 @@ permissions:
   contents: read
 
 jobs:
+  handbook:
+    name: Handbook build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
   quality:
     name: Windows quality checks
     runs-on: windows-latest

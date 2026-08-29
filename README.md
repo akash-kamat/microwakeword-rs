@@ -9,6 +9,8 @@
 [![CI](https://github.com/akash-kamat/microwakeword-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/akash-kamat/microwakeword-rs/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+[Handbook](https://akash-kamat.github.io/microwakeword-rs/) · [API docs](https://docs.rs/micro-wakeword) · [Examples](examples)
+
 </div>
 
 `micro-wakeword` runs
@@ -98,6 +100,49 @@ audio, resets the detector, and continues automatically. You can inspect the
 cumulative count with `listener.dropped_audio_blocks()`; a dropped block is 10
 milliseconds. Run latency-sensitive applications with `--release`.
 
+### Handle microphone disconnection
+
+Without `.device(...)`, a listener selects the operating system's default
+input **when the listener is created**. It does not silently switch to another
+microphone if that device is unplugged. `next_detection()` then returns either
+`Error::AudioStreamEnded` or `Error::Audio`, depending on the audio driver.
+
+Applications that should survive an unplug can catch those errors, drop the
+old listener, wait briefly, and create a new one. A newly created default-device
+listener uses whatever input the operating system now considers the default;
+the crate never chooses an arbitrary fallback device. See the complete
+[`reconnect` example](examples/reconnect.rs).
+
+```rust,no_run
+use std::{thread, time::Duration};
+use micro_wakeword::{Error, Listener};
+
+# fn run() -> Result<(), Box<dyn std::error::Error>> {
+'connect: loop {
+    let mut listener = match Listener::from_config("wake-word.json") {
+        Ok(listener) => listener,
+        Err(Error::Audio(_) | Error::AudioStreamEnded) => {
+            thread::sleep(Duration::from_secs(2));
+            continue;
+        }
+        Err(error) => return Err(error.into()),
+    };
+
+    loop {
+        match listener.next_detection() {
+            Ok(Some(detection)) => println!("Detected {}", detection.wake_word),
+            Ok(None) => return Ok(()),
+            Err(Error::Audio(_) | Error::AudioStreamEnded) => {
+                thread::sleep(Duration::from_secs(2));
+                continue 'connect;
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+}
+# }
+```
+
 ## Only have a `.tflite` model?
 
 JSON is recommended, but it is not required. Provide the settings yourself:
@@ -169,6 +214,7 @@ Commands below use the sample files in this repository's `../models` folder:
 | Supply a TFLite runtime | `cargo run --no-default-features --example custom_runtime -- CONFIG.json tensorflowlite_c.dll` |
 | Inspect/reset a listener's detector | `cargo run --release --example detector_access -- ../models/miku.json` |
 | Match individual error types | `cargo run --release --example error_handling -- ../models/miku.json` |
+| Reconnect after microphone loss | `cargo run --release --example reconnect -- ../models/miku.json` |
 
 `detect_pcm` expects headerless little-endian i16 audio at 16 kHz mono. Omit
 `audio.raw` to run it against generated silence.

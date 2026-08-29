@@ -61,3 +61,7 @@ required-features = ["listener"]
 [[example]]
 name = "error_handling"
 required-features = ["listener"]
+
+[[example]]
+name = "reconnect"
+required-features = ["listener"]

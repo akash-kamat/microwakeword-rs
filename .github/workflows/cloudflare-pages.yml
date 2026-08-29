@@ -1,0 +1,43 @@
+name: Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - ".github/workflows/cloudflare-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy handbook
+    if: vars.CLOUDFLARE_PAGES_PROJECT_NAME != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Install dependencies
+        working-directory: website
+        run: npm ci
+      - name: Build for Cloudflare Pages
+        working-directory: website
+        run: npm run build
+        env:
+          SITE_URL: ${{ vars.CLOUDFLARE_PAGES_SITE_URL }}
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy website/dist --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }} --branch=${{ github.ref_name }}

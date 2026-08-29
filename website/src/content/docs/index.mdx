@@ -1,0 +1,81 @@
+---
+title: Wake words, made Rusty
+description: Local, streaming wake-word detection for Rust applications.
+template: splash
+hero:
+  tagline: Tiny models. Private audio. One friendly Rust API—from a live microphone or your own PCM stream.
+  image:
+    file: ../../assets/hero-wave.svg
+    alt: A colorful audio waveform flowing through a wake-word detector
+  actions:
+    - text: Start listening
+      link: ./getting-started/installation/
+      icon: right-arrow
+      variant: primary
+    - text: Explore the APIs
+      link: ./getting-started/choose-api/
+      icon: open-book
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<div class="signal-strip" aria-label="Animated audio waveform">
+  {[14, 28, 46, 70, 42, 82, 52, 96, 61, 38, 76, 48, 25, 58, 88, 54, 33, 67, 41, 20].map((height, i) => <span style={`--bar:${height}px;--i:${i}`} />)}
+</div>
+
+## Pick your path
+
+<CardGrid>
+  <Card title="🎙️ Start with a microphone" icon="seti:audio">
+    `Listener` opens an input device, downmixes and resamples it, runs detection, and applies a cooldown.
+    [Build your first listener →](./getting-started/first-listener/)
+  </Card>
+  <Card title="〰️ Bring your own audio" icon="seti:rust">
+    `Detector` accepts deterministic 10 ms PCM blocks from files, calls, network streams, or your audio engine.
+    [Feed custom audio →](./detector/custom-audio/)
+  </Card>
+  <Card title="🧠 Use your own model" icon="puzzle">
+    Load a standard microWakeWord JSON file, or configure a standalone `.tflite` model explicitly.
+    [Understand model setup →](./models/config-json/)
+  </Card>
+  <Card title="🔒 Keep audio private" icon="lock">
+    Detection happens locally. Audio does not need to leave the process or touch a cloud API.
+    [See platform requirements →](./reference/platforms/)
+  </Card>
+</CardGrid>
+
+## The whole pipeline
+
+```text
+Microphone ──> capture ──> mono + 16 kHz ──> Listener ─┐
+                                                       ├──> Detector ──> Detection
+File / app / socket ──> your decode + resample ─────────┘
+```
+
+The detector converts every 10 ms audio block into microWakeWord frontend features, evaluates the TensorFlow Lite model, smooths recent probabilities, and reports a match when the configured cutoff is reached.
+
+:::note[Current platform story]
+Windows x86-64 works out of the box with a bundled TensorFlow Lite runtime. Linux and macOS builds need a compatible TensorFlow Lite C shared library supplied by the application.
+:::
+
+## Five-minute version
+
+```bash
+cargo add micro-wakeword
+```
+
+```rust
+use micro_wakeword::Listener;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut listener = Listener::from_config("wake-word.json")?;
+
+    while let Some(hit) = listener.next_detection()? {
+        println!("Heard {} ({:.1}%)", hit.wake_word, hit.probability * 100.0);
+    }
+    Ok(())
+}
+```
+
+Your model JSON and `.tflite` file stay together. That is enough to start listening.

@@ -12,6 +12,13 @@ use crate::{Config, Detection, Detector, Error, Result, Runtime};
 pub const DEFAULT_COOLDOWN: Duration = Duration::from_secs(1);
 
 /// A live microphone stream connected to a detector.
+///
+/// When no device is specified, the system's default input is selected when
+/// the listener is created. The listener does not silently switch devices if
+/// that input is unplugged or the system default changes. [`Self::next_detection`]
+/// instead returns [`Error::AudioStreamEnded`] or [`Error::Audio`], depending
+/// on the platform and audio driver. An application that wants reconnection
+/// can drop the listener and create another one; see `examples/reconnect.rs`.
 pub struct Listener {
     detector: Detector,
     receiver: mpsc::Receiver<[i16; crate::AUDIO_BLOCK_SAMPLES]>,
@@ -59,6 +66,10 @@ impl Listener {
     }
 
     /// Block until a detection occurs or the audio stream reports an error.
+    ///
+    /// A disconnected microphone is reported as [`Error::AudioStreamEnded`]
+    /// or [`Error::Audio`]. This method does not automatically select another
+    /// input device.
     pub fn next_detection(&mut self) -> Result<Option<Detection>> {
         loop {
             if let Some(error) = self.audio_status.take_error() {

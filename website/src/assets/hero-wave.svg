@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 430" role="img" aria-labelledby="title desc">
+  <title id="title">A wake-word audio signal becoming a detection</title>
+  <desc id="desc">A colorful waveform travels through a detector and lights up a detection badge.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#171a33"/><stop offset="1" stop-color="#0a2529"/></linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#a493ff"/><stop offset="1" stop-color="#39dfbe"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect x="18" y="18" width="644" height="394" rx="42" fill="url(#bg)" stroke="#8b7bff" stroke-opacity=".3" stroke-width="2"/>
+  <g opacity=".18" stroke="#b6baf0"><path d="M70 80h540M70 140h540M70 200h540M70 260h540M70 320h540"/><path d="M120 60v300M220 60v300M320 60v300M420 60v300M520 60v300"/></g>
+  <path d="M65 220h40l15-34 20 69 22-118 26 158 24-125 25 82 21-48 19 16h45" fill="none" stroke="url(#wave)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+  <rect x="337" y="153" width="132" height="134" rx="28" fill="#232742" stroke="#9183ff" stroke-width="3"/>
+  <circle cx="403" cy="207" r="24" fill="none" stroke="#a493ff" stroke-width="5"/><path d="M403 179v-12M403 247v-12M375 207h-12M443 207h-12" stroke="#a493ff" stroke-width="5" stroke-linecap="round"/>
+  <text x="403" y="264" fill="#e9e9ff" font-family="system-ui,sans-serif" font-size="17" font-weight="700" text-anchor="middle">DETECTOR</text>
+  <path d="M470 220h38" stroke="#39dfbe" stroke-width="7" stroke-linecap="round"/><path d="m499 205 17 15-17 15" fill="none" stroke="#39dfbe" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="530" y="171" width="88" height="98" rx="25" fill="#173a38" stroke="#39dfbe" stroke-width="3" filter="url(#glow)"/>
+  <path d="m555 218 13 13 26-29" fill="none" stroke="#58f3d1" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="340" y="355" fill="#b9bddc" font-family="ui-monospace,monospace" font-size="15" text-anchor="middle">16 kHz PCM  →  40 features  →  probability</text>
+</svg>
