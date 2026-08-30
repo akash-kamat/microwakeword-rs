@@ -29,8 +29,14 @@ only to `micro-wakeword` for later automated releases.
    ```
 
 The release workflow verifies that the tag matches the package version, reruns
-the release checks, publishes to crates.io, and creates a GitHub Release with
-generated release notes and the `.crate` package attached.
+the release checks, and builds command-line binaries natively on all supported
+targets. Only after every build succeeds does it publish the single
+`micro-wakeword` crate and create a GitHub Release containing:
+
+- the `.crate` package;
+- Windows x86-64, Linux x86-64, and Linux ARM64 command-line binaries;
+- macOS Intel and Apple Silicon command-line binaries;
+- a SHA-256 checksum beside every command-line binary.
 
 If the workflow fails before publishing, fix the problem, delete the local and
 remote tag, and create it again on the corrected commit. Never reuse or replace

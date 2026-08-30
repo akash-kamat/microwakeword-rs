@@ -33,7 +33,7 @@ micro-wakeword = "0.1"
 
 ### Windows x86-64
 
-The TensorFlow Lite 2.17.1 runtime is bundled and checksum-verified. Install the **MSVC C++ build tools** because the crate compiles its audio feature frontend from C++ source.
+The TensorFlow Lite runtime is bundled and checksum-verified. Install the **MSVC C++ build tools** because the crate compiles its audio feature frontend from C++ source.
 
 With Rust installed through rustup, the standard Windows MSVC toolchain is recommended:
 
@@ -41,7 +41,7 @@ With Rust installed through rustup, the standard Windows MSVC toolchain is recom
 rustup default stable-x86_64-pc-windows-msvc
 ```
 
-### Linux
+### Linux x86-64 and ARM64
 
 Install your distribution's audio development package for CPAL. On Ubuntu/Debian:
 
@@ -49,11 +49,16 @@ Install your distribution's audio development package for CPAL. On Ubuntu/Debian
 sudo apt-get install libasound2-dev
 ```
 
-You must also provide a compatible TensorFlow Lite C shared library. See [TensorFlow Lite runtime](../../reference/runtime/).
+Also install a C++ compiler if your distribution does not include one. The
+TensorFlow Lite runtime is bundled for glibc-based x86-64 and ARM64 systems.
+Musl and other architectures can use an explicit or system runtime; see
+[TensorFlow Lite runtime](../../reference/runtime/).
 
-### macOS
+### macOS Intel and Apple Silicon
 
-Microphone capture builds through CoreAudio. You must provide a compatible TensorFlow Lite C shared library and macOS will ask for microphone permission when your app first records.
+Install Xcode Command Line Tools with `xcode-select --install`. Microphone
+capture uses CoreAudio, the matching TensorFlow Lite runtime is bundled, and
+macOS asks for microphone permission when your app first records.
 
 ## Keep model files together
 
@@ -81,5 +86,5 @@ cargo run --release
 Use release mode for real listening. Debug builds can process audio too slowly and cause avoidable dropped blocks.
 
 :::tip[Try without writing an app]
-GitHub releases include a Windows command-line executable. Put it beside your model files and run `micro-wakeword-…exe wake-word.json`.
+GitHub releases include command-line executables for every bundled target. Put one beside your model files and run it with `wake-word.json`.
 :::

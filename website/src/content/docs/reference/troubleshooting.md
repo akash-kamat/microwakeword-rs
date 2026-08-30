@@ -35,7 +35,10 @@ The `model` path is relative to the JSON file. Check that the `.tflite` file exi
 
 ## TensorFlow Lite cannot be loaded
 
-Windows x86-64 uses the bundled runtime unless an environment variable overrides it. On other platforms, supply a compatible shared library with `Runtime::from_path(...)` or configure the system loader.
+Windows x86-64, Linux x86-64/ARM64, and macOS Intel/Apple Silicon use a bundled
+runtime unless an environment variable overrides it. Check that the process
+can write to its OS cache directory. On another target, supply a compatible
+shared library with `Runtime::from_path(...)` or configure the system loader.
 
 ## Device name is ambiguous
 

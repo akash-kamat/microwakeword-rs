@@ -20,10 +20,10 @@ below are the main steps toward broader compatibility and production maturity.
 
 ## Platform support
 
-- [ ] Provide stronger Linux and macOS support and CI, including runtime tests
-      rather than compile-only checks.
-- [ ] Investigate bundling verified TensorFlow Lite C runtimes for supported
-      Linux and macOS architectures, with checksums and license notices.
+- [x] Provide Linux and macOS CI that loads the real bundled runtime rather
+      than stopping at compile-only checks.
+- [x] Bundle verified TensorFlow Lite C runtimes for Linux x86-64/ARM64 and
+      macOS Intel/Apple Silicon, with checksums and license notices.
 
 ## Model compatibility
 

@@ -11,9 +11,11 @@ This is the default. It checks in order:
 
 1. `MICRO_WAKEWORD_TFLITE_LIB` environment variable;
 2. `TFLITE_C_LIB` environment variable;
-3. the bundled, checksum-verified TensorFlow Lite 2.17.1 runtime on Windows x86-64.
+3. the bundled, checksum-verified TensorFlow Lite runtime for the current target.
 
-On unsupported bundled-runtime platforms, supply a path or choose the system loader.
+Bundled targets are Windows x86-64, Linux x86-64, Linux ARM64, macOS Intel,
+and macOS Apple Silicon. Unsupported operating systems, CPU architectures, and
+musl Linux targets can supply a path or choose the system loader.
 
 ## Explicit path
 
@@ -57,4 +59,15 @@ This asks the underlying `tflite-c-rs` loader to search its supported system loc
 
 ## Why allow a custom path?
 
-It lets applications support non-Windows platforms, control how native dependencies are packaged, use an approved runtime build, or test compatibility with another TensorFlow Lite release. The path points to the native library—not the model.
+It lets applications support another target, control how native dependencies are packaged, use an approved runtime build, or test compatibility with another TensorFlow Lite release. The path points to the native library—not the model.
+
+## Extraction and verification
+
+The native library is embedded in the crate. On first use, `Runtime::Auto`
+writes only the matching target's library to the operating system cache,
+verifies its SHA-256 digest, and loads that exact path. Later runs reuse the
+verified file. No runtime download or network access occurs.
+
+The Windows, Linux, and Apple Silicon builds use TensorFlow Lite 2.17.1. Intel
+macOS uses the upstream distributor's newest Intel build, 2.17.0; the C API
+used by this crate is compatible with both.

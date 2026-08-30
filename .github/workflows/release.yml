@@ -9,10 +9,11 @@ permissions:
   contents: write
 
 jobs:
-  publish:
-    name: Publish ${{ github.ref_name }}
+  validate:
+    name: Validate ${{ github.ref_name }}
     runs-on: windows-latest
-    environment: release
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -31,43 +32,80 @@ jobs:
           }
           "version=$($package.version)" >> $env:GITHUB_OUTPUT
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-      - name: Run Clippy
-        run: cargo clippy --locked --all-targets --all-features -- -D warnings
-      - name: Run tests
-        run: cargo test --locked --all-targets --all-features
-      - name: Build documentation
-        run: cargo doc --locked --no-deps --all-features
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - run: cargo test --locked --all-targets --all-features
+      - run: cargo doc --locked --no-deps --all-features
         env:
           RUSTDOCFLAGS: -D warnings
       - name: Build crates.io package
         run: cargo package --locked
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/package-target
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-crate
+          path: ${{ runner.temp }}/package-target/package/*.crate
+          if-no-files-found: error
 
-      - name: Build Windows CLI
-        run: cargo build --release --locked --bin micro-wakeword
-
-      - name: Prepare release assets
-        id: assets
+  build-cli:
+    name: CLI for ${{ matrix.target }}
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            target: windows-x86_64
+          - runner: ubuntu-24.04
+            target: linux-x86_64
+          - runner: ubuntu-24.04-arm
+            target: linux-aarch64
+          - runner: macos-15
+            target: macos-aarch64
+          - runner: macos-15-intel
+            target: macos-x86_64
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Linux audio development files
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes libasound2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked --bin micro-wakeword
+      - name: Prepare release asset
         shell: pwsh
         env:
-          CRATE_VERSION: ${{ steps.metadata.outputs.version }}
+          CRATE_VERSION: ${{ needs.validate.outputs.version }}
+          TARGET_NAME: ${{ matrix.target }}
         run: |
-          $name = "micro-wakeword-v$env:CRATE_VERSION-windows-x86_64.exe"
-          $asset = Join-Path $env:RUNNER_TEMP $name
-          Copy-Item "target\release\micro-wakeword.exe" $asset
-          $hash = (Get-FileHash $asset -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $name" | Set-Content "$asset.sha256" -Encoding ascii
-          "executable=$asset" >> $env:GITHUB_OUTPUT
-          "checksum=$asset.sha256" >> $env:GITHUB_OUTPUT
+          $extension = if ($IsWindows) { ".exe" } else { "" }
+          $source = "target/release/micro-wakeword$extension"
+          $name = "micro-wakeword-v$env:CRATE_VERSION-$env:TARGET_NAME$extension"
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          Copy-Item $source "release-assets/$name"
+          $hash = (Get-FileHash "release-assets/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $name" | Set-Content "release-assets/$name.sha256" -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-cli-${{ matrix.target }}
+          path: release-assets/*
+          if-no-files-found: error
 
+  publish:
+    name: Publish crate
+    needs: [validate, build-cli]
+    runs-on: windows-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
       - name: Check whether this version is already on crates.io
         id: registry
         shell: pwsh
         env:
-          CRATE_VERSION: ${{ steps.metadata.outputs.version }}
+          CRATE_VERSION: ${{ needs.validate.outputs.version }}
         run: |
           $uri = "https://crates.io/api/v1/crates/micro-wakeword/$env:CRATE_VERSION"
           $response = Invoke-WebRequest $uri -SkipHttpErrorCheck
@@ -78,20 +116,29 @@ jobs:
           } else {
             throw "crates.io returned HTTP $($response.StatusCode)"
           }
-
       - name: Publish to crates.io
         if: steps.registry.outputs.exists != 'true'
         run: cargo publish --locked
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
 
-      - name: Create GitHub Release
-        shell: pwsh
+  github-release:
+    name: Create GitHub release
+    needs: [validate, build-cli, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-          CRATE_VERSION: ${{ steps.metadata.outputs.version }}
-          EXECUTABLE: ${{ steps.assets.outputs.executable }}
-          CHECKSUM: ${{ steps.assets.outputs.checksum }}
+          CRATE_VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          $crate = Join-Path $env:RUNNER_TEMP "package-target\package\micro-wakeword-$env:CRATE_VERSION.crate"
-          gh release create $env:GITHUB_REF_NAME $crate $env:EXECUTABLE $env:CHECKSUM --verify-tag --generate-notes --title "micro-wakeword $env:CRATE_VERSION"
+          gh release create "$GITHUB_REF_NAME" release-assets/* \
+            --verify-tag \
+            --generate-notes \
+            --title "micro-wakeword $CRATE_VERSION"

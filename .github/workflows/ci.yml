@@ -59,12 +59,22 @@ jobs:
       - run: cargo check --locked --all-targets --all-features
 
   platforms:
-    name: Compile on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - name: Windows x86-64
+            runner: windows-latest
+          - name: Linux x86-64
+            runner: ubuntu-24.04
+          - name: Linux ARM64
+            runner: ubuntu-24.04-arm
+          - name: macOS Apple Silicon
+            runner: macos-15
+          - name: macOS Intel
+            runner: macos-15-intel
     steps:
       - uses: actions/checkout@v5
       - name: Install Linux audio development files
@@ -74,6 +84,28 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --locked --all-targets --all-features
       - run: cargo check --locked --all-targets --no-default-features
+      - name: Load the bundled TensorFlow Lite runtime
+        run: cargo test --locked --no-default-features --lib runtime::tests::bundled_runtime_loads_all_required_symbols
+      - name: Download pinned inference test model
+        shell: pwsh
+        run: |
+          $directory = Join-Path $env:RUNNER_TEMP "micro-wakeword-test-model"
+          New-Item -ItemType Directory -Force $directory | Out-Null
+          $base = "https://raw.githubusercontent.com/TaterTotterson/Tater-Wake-Words/2a187129da6735aa05385f3fe360941931cb7cc3/microWakeWordsV3"
+          Invoke-WebRequest "$base/miku.json" -OutFile "$directory/miku.json"
+          Invoke-WebRequest "$base/miku.tflite" -OutFile "$directory/miku.tflite"
+          $jsonHash = (Get-FileHash "$directory/miku.json" -Algorithm SHA256).Hash.ToLowerInvariant()
+          $modelHash = (Get-FileHash "$directory/miku.tflite" -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($jsonHash -ne "f8e73a893ea2efb1e3954fc5e9b6724a27721a19526fff1448b187fb7708a36a") {
+            throw "Unexpected test JSON checksum: $jsonHash"
+          }
+          if ($modelHash -ne "83882f73f9d0c228e085bf4ce6e71a07871545638598fa1962a3c91ccdde521b") {
+            throw "Unexpected test model checksum: $modelHash"
+          }
+      - name: Run real model inference with the bundled runtime
+        run: cargo test --locked --no-default-features --test inference
+        env:
+          MICRO_WAKEWORD_TEST_CONFIG: ${{ runner.temp }}/micro-wakeword-test-model/miku.json
 
   security:
     name: Dependency security audit

@@ -31,8 +31,8 @@ Your 16 kHz PCM ─────────┘
 ```
 
 > [!NOTE]
-> Windows x86-64 is supported out of the box. Other platforms currently need a
-> compatible TensorFlow Lite C shared library supplied by the application.
+> Windows x86-64, Linux x86-64/ARM64, and macOS Intel/Apple Silicon work out of
+> the box with a bundled, checksum-verified TensorFlow Lite C runtime.
 
 ## Install
 
@@ -40,17 +40,19 @@ Your 16 kHz PCM ─────────┘
 cargo add micro-wakeword
 ```
 
-Windows builds require the MSVC C++ build tools because the audio frontend is
-compiled as part of the crate.
+The crate compiles its audio frontend from C++ source. Install the MSVC C++
+build tools on Windows, a C++ compiler plus ALSA development files on Linux,
+or Xcode Command Line Tools on macOS.
 
-### Ready-made Windows command
+### Ready-made command
 
 Each [GitHub release](https://github.com/akash-kamat/microwakeword-rs/releases)
-includes a prebuilt Windows x86-64 executable and its SHA-256 checksum. Keep
-your model JSON and `.tflite` file together, then run:
+includes prebuilt command-line programs for every bundled target and SHA-256
+checksums. Keep your model JSON and `.tflite` file together, then run the file
+for your platform. For example, on Windows:
 
 ```powershell
-.\micro-wakeword-v0.1.2-windows-x86_64.exe wake-word.json --cooldown 0.5
+.\micro-wakeword-v0.1.3-windows-x86_64.exe wake-word.json --cooldown 0.5
 ```
 
 Use `--list-devices` to find microphone names and `--help` for every option.
@@ -221,11 +223,12 @@ Commands below use the sample files in this repository's `../models` folder:
 
 ## TensorFlow Lite runtime
 
-On Windows x86-64, `Runtime::Auto` uses this order:
+On every supported target, `Runtime::Auto` uses this order:
 
 1. `MICRO_WAKEWORD_TFLITE_LIB`
 2. `TFLITE_C_LIB`
-3. The bundled, checksum-verified TensorFlow Lite 2.17.1 runtime
+3. The bundled, checksum-verified TensorFlow Lite runtime for the current
+   operating system and architecture
 
 To choose a library explicitly:
 
@@ -241,6 +244,9 @@ let detector = Detector::from_config_with_runtime(
 ```
 
 `Runtime::System` searches the platform locations supported by `tflite-c-rs`.
+Bundled targets are Windows x86-64, Linux x86-64, Linux ARM64, macOS Intel,
+and macOS Apple Silicon. Intel macOS uses TensorFlow Lite 2.17.0; the other
+bundled targets use 2.17.1.
 
 ## Model compatibility
 

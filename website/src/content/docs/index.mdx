@@ -61,8 +61,8 @@ Your audio  ->  PCM blocks --+
 
 The detector converts every 10 ms audio block into microWakeWord frontend features, evaluates the TensorFlow Lite model, smooths recent probabilities, and reports a match when the configured cutoff is reached.
 
-:::note[Current platform story]
-Windows x86-64 works out of the box with a bundled TensorFlow Lite runtime. Linux and macOS builds need a compatible TensorFlow Lite C shared library supplied by the application.
+:::note[Runs out of the box]
+The bundled TensorFlow Lite runtime supports Windows x86-64, Linux x86-64 and ARM64, plus macOS Intel and Apple Silicon. You still have full control through `Runtime::Path` and `Runtime::System`.
 :::
 
 ## Listen in a few lines
