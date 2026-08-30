@@ -25,6 +25,32 @@ below are the main steps toward broader compatibility and production maturity.
 - [x] Bundle verified TensorFlow Lite C runtimes for Linux x86-64/ARM64 and
       macOS Intel/Apple Silicon, with checksums and license notices.
 
+## Package and runtime footprint
+
+Current behaviour:
+
+- The default `listener` feature enables CPAL microphone capture and Rubato
+  resampling. CPAL compiles only the audio backend for the current platform:
+  WASAPI on Windows, ALSA on Linux, or CoreAudio on macOS.
+- `default-features = false` removes microphone capture and resampling for
+  applications that supply their own 16 kHz mono `i16` PCM audio to
+  `Detector`.
+- The crates.io source package currently contains every bundled TensorFlow
+  Lite runtime, so all of them consume download and Cargo-cache disk space.
+  Conditional compilation embeds and loads only the current target's runtime,
+  so the other platform binaries do not consume application RAM.
+
+Planned improvements:
+
+- [ ] Move bundled native libraries into internal, target-specific runtime
+      crates before the main package approaches crates.io's size limit. The
+      public installation remains `cargo add micro-wakeword`; Cargo selects
+      the appropriate internal runtime dependency automatically.
+- [ ] Publish repeatable memory benchmarks for startup, steady-state
+      detection, and long-running use with both the default `Listener` and the
+      low-level `Detector` configuration. Track regressions in CI where
+      measurements are stable enough to be meaningful.
+
 ## Model compatibility
 
 - [ ] Support more model/input formats beyond configuration version 2 with a
