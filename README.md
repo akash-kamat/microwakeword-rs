@@ -9,7 +9,7 @@
 [![CI](https://github.com/akash-kamat/microwakeword-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/akash-kamat/microwakeword-rs/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-[Handbook](https://akash-kamat.github.io/microwakeword-rs/) · [API docs](https://docs.rs/micro-wakeword) · [Examples](examples)
+[Handbook](https://akash-kamat.github.io/microwakeword-rs/) · [API docs](https://docs.rs/micro-wakeword) · [Examples](examples) · [Roadmap](ROADMAP.md)
 
 </div>
 
