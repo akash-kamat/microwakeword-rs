@@ -27,11 +27,11 @@ default = ["listener"]
 listener = ["dep:cpal", "dep:rubato"]
 
 [dependencies]
-cpal = { version = "0.16", optional = true }
-rubato = { version = "3.0", features = ["fft_resampler"], optional = true }
+cpal = { version = "0.18", optional = true }
+rubato = { version = "4.0", features = ["fft_resampler"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sha2 = "0.10"
+sha2 = "0.11"
 thiserror = "2.0"
 tflite-c-rs = "0.0.1"
 
