@@ -15,7 +15,7 @@ jobs:
     outputs:
       version: ${{ steps.metadata.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -42,7 +42,7 @@ jobs:
         run: cargo package --locked
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/package-target
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-crate
           path: ${{ runner.temp }}/package-target/package/*.crate
@@ -67,7 +67,7 @@ jobs:
           - runner: macos-15-intel
             target: macos-x86_64
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Install Linux audio development files
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install --yes libasound2-dev
@@ -87,7 +87,7 @@ jobs:
           Copy-Item $source "release-assets/$name"
           $hash = (Get-FileHash "release-assets/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $name" | Set-Content "release-assets/$name.sha256" -Encoding ascii
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-cli-${{ matrix.target }}
           path: release-assets/*
@@ -99,7 +99,7 @@ jobs:
     runs-on: windows-latest
     environment: release
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Check whether this version is already on crates.io
         id: registry
@@ -127,8 +127,8 @@ jobs:
     needs: [validate, build-cli, publish]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: release-*
           path: release-assets
